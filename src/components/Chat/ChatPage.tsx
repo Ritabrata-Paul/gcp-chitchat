@@ -42,7 +42,7 @@ export const ChatPage = () => {
       <header className="bg-gray-800/50 backdrop-blur-lg border-b border-violet-500/20 p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-purple-600">
-            CHATHOLA
+            CHITCHAT
           </h1>
           <div className="flex items-center gap-2">
             <button
