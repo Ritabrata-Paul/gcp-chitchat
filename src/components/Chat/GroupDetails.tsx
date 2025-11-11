@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../config/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { X, Edit2, UserPlus, Save, Trash2, Camera, Users, Crown, Shield } from 'lucide-react';
+import { X, Edit2, UserPlus, Save, Trash2, Camera, Users, Crown, Shield, Check } from 'lucide-react';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../config/firebase';
 
@@ -125,7 +125,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
     // Filter out users who are already members
     const memberIds = new Set(members.map(m => m.user_id));
     const available = (allProfiles || []).filter(p => !memberIds.has(p.id));
-
+    
     setAllUsers(available);
   };
 
@@ -187,7 +187,6 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
     setUploading(true);
     try {
       let avatarUrl = group.avatar_url;
-
       if (newAvatarFile) {
         avatarUrl = await uploadAvatar(newAvatarFile);
       }
@@ -240,6 +239,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
       setAddMemberMode(false);
       setSelectedNewMembers(new Set());
       loadMembers();
+      loadAvailableUsers();
       onGroupUpdated();
     } catch (error) {
       console.error('Error adding members:', error);
@@ -325,7 +325,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800/90 backdrop-blur-lg rounded-2xl shadow-2xl border border-violet-500/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-gray-800/95 backdrop-blur-lg p-6 border-b border-violet-500/20 flex items-center justify-between">
+        <div className="sticky top-0 bg-gray-800/95 backdrop-blur-lg p-6 border-b border-violet-500/20 flex items-center justify-between z-10">
           <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-purple-600">
             {editMode ? 'Edit Group' : 'Group Details'}
           </h2>
@@ -345,7 +345,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
                   <Users size={48} className="text-white" />
                 )}
               </div>
-              {editMode && (
+              {editMode && isAdmin && (
                 <label className="absolute bottom-0 right-0 p-2 bg-violet-600 rounded-full hover:bg-violet-700 transition-colors cursor-pointer">
                   <Camera size={20} className="text-white" />
                   <input
@@ -372,7 +372,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
               </div>
             )}
 
-            {editMode ? (
+            {editMode && isAdmin ? (
               <div className="w-full space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Group Name</label>
@@ -406,7 +406,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
             )}
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Only show if admin */}
           {isAdmin && (
             <div className="flex gap-2">
               {editMode ? (
@@ -453,8 +453,8 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
             </div>
           )}
 
-          {/* Add Members Section */}
-          {addMemberMode && (
+          {/* Add Members Section - Only show if admin */}
+          {addMemberMode && isAdmin && (
             <div className="bg-gray-900/50 border border-violet-500/30 rounded-lg p-4">
               <h4 className="text-lg font-semibold text-white mb-4">
                 Add New Members ({selectedNewMembers.size} selected)
@@ -473,9 +473,9 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
                           : 'bg-gray-800/50 hover:bg-gray-700/50'
                       }`}
                     >
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold overflow-hidden">
                         {profile.avatar_url ? (
-                          <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full rounded-full object-cover" />
+                          <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
                         ) : (
                           profile.display_name.charAt(0).toUpperCase()
                         )}
@@ -485,11 +485,7 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
                         <p className="text-sm text-gray-400">{profile.email}</p>
                       </div>
                       {selectedNewMembers.has(profile.id) && (
-                        <div className="w-6 h-6 bg-violet-600 rounded-full flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
+                        <Check size={20} className="text-green-500" />
                       )}
                     </button>
                   ))
@@ -526,9 +522,9 @@ export const GroupDetails = ({ groupId, groupName, onClose, onGroupUpdated }: Gr
                   className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg hover:bg-gray-800/50 transition-all"
                 >
                   <div className="relative">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold overflow-hidden">
                       {member.avatar_url ? (
-                        <img src={member.avatar_url} alt={member.display_name} className="w-full h-full rounded-full object-cover" />
+                        <img src={member.avatar_url} alt={member.display_name} className="w-full h-full object-cover" />
                       ) : (
                         member.display_name.charAt(0).toUpperCase()
                       )}

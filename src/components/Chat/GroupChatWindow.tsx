@@ -35,6 +35,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showGroupDetails, setShowGroupDetails] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
@@ -42,7 +43,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
   useEffect(() => {
     if (selectedGroupId && user) {
       loadMessages();
-      // Update last read time immediately when opening the group
       updateLastReadAt();
       
       const channel = supabase
@@ -81,8 +81,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
               }
               return [...prev, newMsg];
             });
-
-            // Update last read time immediately when receiving new messages
             setTimeout(() => {
               updateLastReadAt();
             }, 100);
@@ -100,7 +98,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
     scrollToBottom();
   }, [messages]);
 
-  // Update last read time when component unmounts or group changes
   useEffect(() => {
     return () => {
       if (selectedGroupId && user) {
@@ -244,7 +241,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
         fileInputRef.current.value = '';
       }
 
-      // Update last read time after sending
       updateLastReadAt();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -274,13 +270,21 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-900/30 to-violet-900/30">
-      <div className="bg-gray-800/50 backdrop-blur-sm p-4 border-b border-violet-500/20">
-        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-          <Users size={24} />
-          {selectedGroupName}
-        </h2>
+      {/* Clickable Header */}
+      <div className="bg-gray-800/50 backdrop-blur-sm border-b border-violet-500/20">
+        <button
+          onClick={() => setShowGroupDetails(true)}
+          className="w-full px-4 py-4 text-left hover:bg-violet-500/10 transition-all flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-2">
+            <Users size={24} className="text-violet-400" />
+            <h2 className="text-xl font-semibold text-white">{selectedGroupName}</h2>
+          </div>
+          <Info size={20} className="text-gray-400 group-hover:text-violet-400 transition-colors" />
+        </button>
       </div>
 
+      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => {
           const isOwn = message.sender_id === user?.uid;
@@ -289,12 +293,12 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
               <div className="max-w-md">
                 {!isOwn && (
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold overflow-hidden">
                       {message.sender?.avatar_url ? (
                         <img
                           src={message.sender.avatar_url}
                           alt={message.sender.display_name}
-                          className="w-full h-full rounded-full object-cover"
+                          className="w-full h-full object-cover"
                         />
                       ) : (
                         message.sender?.display_name?.charAt(0).toUpperCase()
@@ -343,6 +347,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Selected File Preview */}
       {selectedFile && (
         <div className="px-4 py-2 bg-gray-800/50 border-t border-violet-500/20 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -363,6 +368,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
         </div>
       )}
 
+      {/* Upload Progress */}
       {uploading && uploadProgress > 0 && (
         <div className="px-4 py-2 bg-gray-800/50 border-t border-violet-500/20">
           <div className="w-full bg-gray-700 rounded-full h-2">
@@ -375,6 +381,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
         </div>
       )}
 
+      {/* Message Input */}
       <div className="p-4 bg-gray-800/50 backdrop-blur-sm border-t border-violet-500/20">
         <div className="flex gap-2">
           <input
@@ -409,6 +416,18 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
           </button>
         </div>
       </div>
+
+      {/* Group Details Modal */}
+      {showGroupDetails && selectedGroupId && (
+        <GroupDetails
+          groupId={selectedGroupId}
+          groupName={selectedGroupName}
+          onClose={() => setShowGroupDetails(false)}
+          onGroupUpdated={() => {
+            // Refresh will happen automatically due to real-time subscriptions
+          }}
+        />
+      )}
     </div>
   );
 };
