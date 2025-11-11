@@ -79,7 +79,7 @@ export const GroupList = ({ selectedGroupId, onSelectGroup, onCreateGroup }: Gro
         .on(
           'postgres_changes',
           {
-            event: 'INSERT',
+            event: '*',
             schema: 'public',
             table: 'group_messages'
           },
@@ -95,7 +95,7 @@ export const GroupList = ({ selectedGroupId, onSelectGroup, onCreateGroup }: Gro
         supabase.removeChannel(messagesChannel);
       };
     }
-  }, [user, selectedGroupId]);
+  }, [user]);
 
   const loadGroups = async () => {
     if (!user) return;
@@ -295,12 +295,12 @@ export const GroupList = ({ selectedGroupId, onSelectGroup, onCreateGroup }: Gro
               selectedGroupId === group.id ? 'bg-violet-500/20' : ''
             } ${group.unreadCount > 0 ? 'bg-violet-500/5' : ''}`}
           >
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0 overflow-hidden">
               {group.avatar_url ? (
                 <img
                   src={group.avatar_url}
                   alt={group.name}
-                  className="w-full h-full rounded-full object-cover"
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <Users size={24} />

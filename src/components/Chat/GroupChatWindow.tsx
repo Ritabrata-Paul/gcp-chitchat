@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../config/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Send, Paperclip, Users, X } from 'lucide-react';
+import { Send, Paperclip, Users, X, Info } from 'lucide-react';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../config/firebase';
+import { GroupDetails } from './GroupDetails';
 
 interface GroupMessage {
   id: string;
@@ -150,11 +151,15 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
   const updateLastReadAt = async () => {
     if (!selectedGroupId || !user) return;
 
-    await supabase
+    const { error } = await supabase
       .from('group_members')
       .update({ last_read_at: new Date().toISOString() })
       .eq('group_id', selectedGroupId)
       .eq('user_id', user.uid);
+
+    if (error) {
+      console.error('Error updating last read time:', error);
+    }
   };
 
   const scrollToBottom = () => {
