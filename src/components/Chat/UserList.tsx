@@ -60,14 +60,15 @@ export const UserList = ({ selectedUserId, onSelectUser }: UserListProps) => {
         .on(
           'postgres_changes',
           {
-            event: 'INSERT',
+            event: '*',
             schema: 'public',
             table: 'messages'
           },
           (payload) => {
-            const newMessage = payload.new as any;
-            // Update last message and unread count if message is for current user
-            if (newMessage.receiver_id === user.uid) {
+            const message = payload.new as any;
+            // Reload users list to update unread counts and last message
+            // Only if the message involves the current user
+            if (message.receiver_id === user.uid || message.sender_id === user.uid) {
               loadUsers();
             }
           }
@@ -79,7 +80,7 @@ export const UserList = ({ selectedUserId, onSelectUser }: UserListProps) => {
         supabase.removeChannel(messagesChannel);
       };
     }
-  }, [user, selectedUserId]);
+  }, [user]);
 
   const loadUsers = async () => {
     if (!user) return;

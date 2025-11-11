@@ -38,6 +38,7 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
   useEffect(() => {
     if (selectedUserId && user) {
       loadMessages();
+      // Mark messages as read immediately when chat opens
       markMessagesAsRead();
       
       const channel = supabase
@@ -72,9 +73,12 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
                 return [...prev, newMsg];
               });
 
-              // Mark as read if message is from the selected user
+              // Mark as read immediately if message is from the selected user
               if (newMsg.sender_id === selectedUserId && newMsg.receiver_id === user.uid) {
-                markMessagesAsRead();
+                // Use setTimeout to ensure the message is inserted before marking as read
+                setTimeout(() => {
+                  markMessagesAsRead();
+                }, 100);
               }
             }
           }

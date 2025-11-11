@@ -41,6 +41,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
   useEffect(() => {
     if (selectedGroupId && user) {
       loadMessages();
+      // Update last read time immediately when opening the group
       updateLastReadAt();
       
       const channel = supabase
@@ -80,8 +81,10 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
               return [...prev, newMsg];
             });
 
-            // Update last read time when receiving new messages
-            updateLastReadAt();
+            // Update last read time immediately when receiving new messages
+            setTimeout(() => {
+              updateLastReadAt();
+            }, 100);
           }
         )
         .subscribe();
