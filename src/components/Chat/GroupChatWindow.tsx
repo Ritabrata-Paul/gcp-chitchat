@@ -44,7 +44,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
       
       // Set up real-time subscription
       const channel = supabase
-        .channel('group_messages_channel')
+        .channel(`group_messages_${selectedGroupId}`)
         .on(
           'postgres_changes',
           {
@@ -53,8 +53,35 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
             table: 'group_messages',
             filter: `group_id=eq.${selectedGroupId}`
           },
-          (payload) => {
-            handleNewMessage(payload.new as GroupMessage);
+          async (payload) => {
+            const newMsg = payload.new as GroupMessage;
+            
+            // Load sender info
+            const { data: senderData } = await supabase
+              .from('profiles')
+              .select('display_name, avatar_url')
+              .eq('id', newMsg.sender_id)
+              .single();
+            
+            newMsg.sender = senderData || undefined;
+            
+            // Load file data if it's a file message
+            if (newMsg.message_type === 'file') {
+              const { data: fileData } = await supabase
+                .from('group_files')
+                .select('file_name, file_type, firebase_url')
+                .eq('message_id', newMsg.id);
+              
+              newMsg.files = fileData || [];
+            }
+            
+            setMessages((prev) => {
+              // Check if message already exists
+              if (prev.some(m => m.id === newMsg.id)) {
+                return prev;
+              }
+              return [...prev, newMsg];
+            });
           }
         )
         .subscribe();
@@ -109,35 +136,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
     }
   };
 
-  const handleNewMessage = async (message: GroupMessage) => {
-    // Load sender info
-    const { data: senderData } = await supabase
-      .from('profiles')
-      .select('display_name, avatar_url')
-      .eq('id', message.sender_id)
-      .single();
-    
-    message.sender = senderData || undefined;
-
-    // Load file data if it's a file message
-    if (message.message_type === 'file') {
-      const { data: fileData } = await supabase
-        .from('group_files')
-        .select('file_name, file_type, firebase_url')
-        .eq('message_id', message.id);
-      
-      message.files = fileData || [];
-    }
-
-    setMessages((prev) => {
-      // Check if message already exists
-      if (prev.some(m => m.id === message.id)) {
-        return prev;
-      }
-      return [...prev, message];
-    });
-  };
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -179,6 +177,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
     if ((!newMessage.trim() && !selectedFile) || !user || !selectedGroupId) return;
 
     setUploading(true);
+
     try {
       let fileUrl = '';
       let messageType = 'text';

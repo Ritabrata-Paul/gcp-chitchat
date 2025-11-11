@@ -38,31 +38,42 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
     if (selectedUserId && user) {
       loadMessages();
       
-      // Set up real-time subscription
+      // Set up real-time subscription for BOTH directions
       const channel = supabase
-        .channel('messages_channel')
+        .channel(`messages_${selectedUserId}_${user.uid}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
-            table: 'messages',
-            filter: `sender_id=eq.${selectedUserId},receiver_id=eq.${user.uid}`
+            table: 'messages'
           },
-          (payload) => {
-            handleNewMessage(payload.new as Message);
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `sender_id=eq.${user.uid},receiver_id=eq.${selectedUserId}`
-          },
-          (payload) => {
-            handleNewMessage(payload.new as Message);
+          async (payload) => {
+            const newMsg = payload.new as Message;
+            
+            // Check if this message is part of this conversation
+            if (
+              (newMsg.sender_id === selectedUserId && newMsg.receiver_id === user.uid) ||
+              (newMsg.sender_id === user.uid && newMsg.receiver_id === selectedUserId)
+            ) {
+              // Load file data if it's a file message
+              if (newMsg.message_type === 'file') {
+                const { data: fileData } = await supabase
+                  .from('files')
+                  .select('file_name, file_type, firebase_url')
+                  .eq('message_id', newMsg.id);
+                
+                newMsg.files = fileData || [];
+              }
+              
+              setMessages((prev) => {
+                // Check if message already exists
+                if (prev.some(m => m.id === newMsg.id)) {
+                  return prev;
+                }
+                return [...prev, newMsg];
+              });
+            }
           }
         )
         .subscribe();
@@ -98,26 +109,6 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
     } else {
       setMessages(data || []);
     }
-  };
-
-  const handleNewMessage = async (message: Message) => {
-    // Load file data if it's a file message
-    if (message.message_type === 'file') {
-      const { data: fileData } = await supabase
-        .from('files')
-        .select('file_name, file_type, firebase_url')
-        .eq('message_id', message.id);
-      
-      message.files = fileData || [];
-    }
-
-    setMessages((prev) => {
-      // Check if message already exists
-      if (prev.some(m => m.id === message.id)) {
-        return prev;
-      }
-      return [...prev, message];
-    });
   };
 
   const scrollToBottom = () => {
@@ -161,6 +152,7 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
     if ((!newMessage.trim() && !selectedFile) || !user || !selectedUserId) return;
 
     setUploading(true);
+
     try {
       let fileUrl = '';
       let messageType = 'text';
