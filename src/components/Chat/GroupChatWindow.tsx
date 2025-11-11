@@ -41,8 +41,8 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
   useEffect(() => {
     if (selectedGroupId && user) {
       loadMessages();
+      updateLastReadAt();
       
-      // Set up real-time subscription
       const channel = supabase
         .channel(`group_messages_${selectedGroupId}`)
         .on(
@@ -56,7 +56,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
           async (payload) => {
             const newMsg = payload.new as GroupMessage;
             
-            // Load sender info
             const { data: senderData } = await supabase
               .from('profiles')
               .select('display_name, avatar_url')
@@ -65,7 +64,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
             
             newMsg.sender = senderData || undefined;
             
-            // Load file data if it's a file message
             if (newMsg.message_type === 'file') {
               const { data: fileData } = await supabase
                 .from('group_files')
@@ -76,12 +74,14 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
             }
             
             setMessages((prev) => {
-              // Check if message already exists
               if (prev.some(m => m.id === newMsg.id)) {
                 return prev;
               }
               return [...prev, newMsg];
             });
+
+            // Update last read time when receiving new messages
+            updateLastReadAt();
           }
         )
         .subscribe();
@@ -95,6 +95,15 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Update last read time when component unmounts or group changes
+  useEffect(() => {
+    return () => {
+      if (selectedGroupId && user) {
+        updateLastReadAt();
+      }
+    };
+  }, [selectedGroupId, user]);
 
   const loadMessages = async () => {
     if (!selectedGroupId) return;
@@ -115,7 +124,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
     if (error) {
       console.error('Error loading messages:', error);
     } else {
-      // Load sender info for each message
       const messagesWithSenders = await Promise.all(
         (data || []).map(async (msg) => {
           const { data: senderData } = await supabase
@@ -134,6 +142,16 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
       
       setMessages(messagesWithSenders);
     }
+  };
+
+  const updateLastReadAt = async () => {
+    if (!selectedGroupId || !user) return;
+
+    await supabase
+      .from('group_members')
+      .update({ last_read_at: new Date().toISOString() })
+      .eq('group_id', selectedGroupId)
+      .eq('user_id', user.uid);
   };
 
   const scrollToBottom = () => {
@@ -177,7 +195,6 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
     if ((!newMessage.trim() && !selectedFile) || !user || !selectedGroupId) return;
 
     setUploading(true);
-
     try {
       let fileUrl = '';
       let messageType = 'text';
@@ -218,6 +235,9 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+
+      // Update last read time after sending
+      updateLastReadAt();
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message');
@@ -305,7 +325,7 @@ export const GroupChatWindow = ({ selectedGroupId, selectedGroupName }: GroupCha
                     <p className="whitespace-pre-wrap break-words">{message.content}</p>
                   )}
                   <p className={`text-xs mt-1 ${isOwn ? 'text-violet-200' : 'text-gray-400'}`}>
-                    {new Date(message.created_at).toLocaleTimeString()}
+                    {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../config/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Send, Paperclip, User, X } from 'lucide-react';
+import { Send, Paperclip, MessageSquare, X, Check, CheckCheck } from 'lucide-react';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../config/firebase';
 
@@ -11,6 +11,7 @@ interface Message {
   receiver_id: string;
   content: string;
   message_type: string;
+  read: boolean;
   created_at: string;
   files?: {
     file_name: string;
@@ -37,10 +38,10 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
   useEffect(() => {
     if (selectedUserId && user) {
       loadMessages();
+      markMessagesAsRead();
       
-      // Set up real-time subscription for BOTH directions
       const channel = supabase
-        .channel(`messages_${selectedUserId}_${user.uid}`)
+        .channel(`messages_${selectedUserId}`)
         .on(
           'postgres_changes',
           {
@@ -51,12 +52,10 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
           async (payload) => {
             const newMsg = payload.new as Message;
             
-            // Check if this message is part of this conversation
             if (
               (newMsg.sender_id === selectedUserId && newMsg.receiver_id === user.uid) ||
               (newMsg.sender_id === user.uid && newMsg.receiver_id === selectedUserId)
             ) {
-              // Load file data if it's a file message
               if (newMsg.message_type === 'file') {
                 const { data: fileData } = await supabase
                   .from('files')
@@ -67,13 +66,31 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
               }
               
               setMessages((prev) => {
-                // Check if message already exists
                 if (prev.some(m => m.id === newMsg.id)) {
                   return prev;
                 }
                 return [...prev, newMsg];
               });
+
+              // Mark as read if message is from the selected user
+              if (newMsg.sender_id === selectedUserId && newMsg.receiver_id === user.uid) {
+                markMessagesAsRead();
+              }
             }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages'
+          },
+          (payload) => {
+            const updatedMsg = payload.new as Message;
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === updatedMsg.id ? updatedMsg : msg))
+            );
           }
         )
         .subscribe();
@@ -89,7 +106,7 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
   }, [messages]);
 
   const loadMessages = async () => {
-    if (!user || !selectedUserId) return;
+    if (!selectedUserId || !user) return;
 
     const { data, error } = await supabase
       .from('messages')
@@ -109,6 +126,17 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
     } else {
       setMessages(data || []);
     }
+  };
+
+  const markMessagesAsRead = async () => {
+    if (!selectedUserId || !user) return;
+
+    await supabase
+      .from('messages')
+      .update({ read: true })
+      .eq('sender_id', selectedUserId)
+      .eq('receiver_id', user.uid)
+      .eq('read', false);
   };
 
   const scrollToBottom = () => {
@@ -152,7 +180,6 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
     if ((!newMessage.trim() && !selectedFile) || !user || !selectedUserId) return;
 
     setUploading(true);
-
     try {
       let fileUrl = '';
       let messageType = 'text';
@@ -166,7 +193,8 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
         sender_id: user.uid,
         receiver_id: selectedUserId,
         content: selectedFile ? selectedFile.name : newMessage,
-        message_type: messageType
+        message_type: messageType,
+        read: false
       };
 
       const { data: messageResult, error: messageError } = await supabase
@@ -212,8 +240,8 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
     return (
       <div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-900/50 to-violet-900/50">
         <div className="text-center">
-          <User size={64} className="mx-auto mb-4 text-violet-500/50" />
-          <p className="text-gray-400 text-lg">Select a user to start chatting</p>
+          <MessageSquare size={64} className="mx-auto mb-4 text-violet-500/50" />
+          <p className="text-gray-400 text-lg">Select a chat to start messaging</p>
         </div>
       </div>
     );
@@ -230,38 +258,47 @@ export const ChatWindow = ({ selectedUserId, selectedUserName }: ChatWindowProps
           const isOwn = message.sender_id === user?.uid;
           return (
             <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-md px-4 py-2 rounded-2xl ${
-                  isOwn
-                    ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
-                    : 'bg-gray-800 text-white'
-                }`}
-              >
-                {message.message_type === 'file' && message.files?.[0] ? (
-                  <div>
-                    <a
-                      href={message.files[0].firebase_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 hover:underline"
-                    >
-                      <Paperclip size={16} />
-                      <span className="text-sm">{message.files[0].file_name}</span>
-                    </a>
-                    {message.files[0].file_type.startsWith('image/') && (
-                      <img
-                        src={message.files[0].firebase_url}
-                        alt={message.files[0].file_name}
-                        className="mt-2 rounded-lg max-w-full"
-                      />
+              <div className="max-w-md">
+                <div
+                  className={`px-4 py-2 rounded-2xl ${
+                    isOwn
+                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
+                      : 'bg-gray-800 text-white'
+                  }`}
+                >
+                  {message.message_type === 'file' && message.files?.[0] ? (
+                    <div>
+                      <a
+                        href={message.files[0].firebase_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:underline"
+                      >
+                        <Paperclip size={16} />
+                        <span className="text-sm">{message.files[0].file_name}</span>
+                      </a>
+                      {message.files[0].file_type.startsWith('image/') && (
+                        <img
+                          src={message.files[0].firebase_url}
+                          alt={message.files[0].file_name}
+                          className="mt-2 rounded-lg max-w-full"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  )}
+                  <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${isOwn ? 'text-violet-200' : 'text-gray-400'}`}>
+                    <span>{new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {isOwn && (
+                      message.read ? (
+                        <CheckCheck size={14} className="text-blue-400" />
+                      ) : (
+                        <Check size={14} />
+                      )
                     )}
                   </div>
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                )}
-                <p className={`text-xs mt-1 ${isOwn ? 'text-violet-200' : 'text-gray-400'}`}>
-                  {new Date(message.created_at).toLocaleTimeString()}
-                </p>
+                </div>
               </div>
             </div>
           );
